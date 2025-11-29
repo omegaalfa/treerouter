@@ -1,10 +1,10 @@
 <?php
 
-namespace Omegaalfa\TreeRouter\Middleware;
+namespace Omegaalfa\SwiftRouter\Middleware;
 
-use Omegaalfa\TreeRouter\Interfaces\MiddlewareInterface;
-use Omegaalfa\TreeRouter\Router\RequestContext;
-use Omegaalfa\TreeRouter\Router\Response;
+use Omegaalfa\SwiftRouter\Interfaces\MiddlewareInterface;
+use Omegaalfa\SwiftRouter\Router\RequestContext;
+use Omegaalfa\SwiftRouter\Router\Response;
 
 class ValidationMiddleware implements MiddlewareInterface
 {

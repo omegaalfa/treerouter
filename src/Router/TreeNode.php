@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Omegaalfa\TreeRouter\Router;
+namespace Omegaalfa\SwiftRouter\Router;
 
 use Psr\Http\Server\MiddlewareInterface;
 

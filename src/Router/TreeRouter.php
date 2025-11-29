@@ -3,10 +3,10 @@
 declare(strict_types=1);
 
 
-namespace Omegaalfa\TreeRouter\Router;
+namespace Omegaalfa\SwiftRouter\Router;
 
 
-use Omegaalfa\TreeRouter\Interfaces\MiddlewareInterface;
+use Omegaalfa\SwiftRouter\Interfaces\MiddlewareInterface;
 use RuntimeException;
 
 class TreeRouter
@@ -121,8 +121,8 @@ class TreeRouter
         // normalize without excessive trimming
         $p = ltrim($routePath, '/');
 
-        // register static fast-path
-        if (!str_contains($p, ':')) {
+        // register static fast-path (only quando o caminho não tem parâmetros)
+        if (!str_contains($fullPath, ':')) {
             $this->staticMap['/' . $p] = [
                 'handler' => $handler,
                 'middlewares' => $allMiddlewares,

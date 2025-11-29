@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Omegaalfa\TreeRouter\Router;
+namespace Omegaalfa\SwiftRouter\Router;
 
-class WTreeRouter extends TreeRouter
+class SwiftRouter extends TreeRouter
 {
     /**
      * Métodos de conveniência HTTP

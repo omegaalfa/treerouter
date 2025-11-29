@@ -3,10 +3,10 @@
 declare(strict_types=1);
 
 
-namespace Omegaalfa\TreeRouter\Interfaces;
+namespace Omegaalfa\SwiftRouter\Interfaces;
 
-use Omegaalfa\TreeRouter\Router\RequestContext;
-use Omegaalfa\TreeRouter\Router\Response;
+use Omegaalfa\SwiftRouter\Router\RequestContext;
+use Omegaalfa\SwiftRouter\Router\Response;
 
 interface MiddlewareInterface
 {

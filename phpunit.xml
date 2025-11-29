@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/12.0/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+         failOnWarning="false"
+         failOnDeprecation="false"
+         failOnRisky="false"
+>
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests</directory>
+        </testsuite>
+    </testsuites>
+
+    <!-- ✅ NOVO FORMATO PARA COBERTURA (PHPUnit 10+) -->
+    <source>
+        <include>
+            <directory suffix=".php">src</directory>
+        </include>
+    </source>
+
+    <coverage>
+        <report>
+            <clover outputFile="coverage.xml"/>
+            <text outputFile="php://stdout"/>
+        </report>
+    </coverage>
+
+    <logging>
+        <junit outputFile="junit.xml"/>
+    </logging>
+</phpunit>

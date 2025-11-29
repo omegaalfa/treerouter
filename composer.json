@@ -1,5 +1,5 @@
 {
-  "name": "omegaalfa/treerouter",
+  "name": "omegaalfa/swiftrouter",
   "type": "library",
   "license": "MIT",
   "description": "This library implements the Trie routing logic",
@@ -24,17 +24,18 @@
   },
   "autoload": {
     "psr-4": {
-      "Omegaalfa\\TreeRouter\\": "src/"
+      "Omegaalfa\\SwiftRouter\\": "src/"
     }
   },
   "autoload-dev": {
     "psr-4": {
-      "Omegaalfa\\TreeRouter\\Tests\\": "tests/"
+      "Omegaalfa\\SwiftRouter\\Tests\\": "tests/"
     }
   },
   "require-dev": {
     "phpunit/phpunit": "^10.0 || ^12.0",
-    "phpstan/phpstan": "^1.11 || ^2.0"
+    "phpstan/phpstan": "^1.11 || ^2.0",
+    "infection/infection": "dev-master"
   },
   "scripts": {
     "test": "phpunit",

@@ -1,0 +1,10 @@
+parameters:
+  level: 4
+  paths:
+    - src
+    - tests
+
+  checkMissingVarTagTypehint: true
+  checkUninitializedProperties: true
+  inferPrivatePropertyTypeFromConstructor: true
+  treatPhpDocTypesAsCertain: true
