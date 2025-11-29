@@ -23,7 +23,7 @@ jobs:
         id: commit-range
         run: |
           git fetch --prune
-          LAST_COMMIT=$(git rev-parse ${{ github.event.before }} || git rev-parse HEAD~1)
+          LAST_COMMIT=$(git rev-parse "${{ github.event.before }}" 2>/dev/null || git rev-parse HEAD~1)
           CURRENT_COMMIT=$(git rev-parse HEAD)
           echo "LAST_COMMIT=$LAST_COMMIT" >> $GITHUB_ENV
           echo "CURRENT_COMMIT=$CURRENT_COMMIT" >> $GITHUB_ENV
@@ -91,6 +91,3 @@ jobs:
 
       - name: 🔎 Run static analysis
         run: vendor/bin/phpstan analyse --level=4 src
-
-      - name: ⚡ Run router benchmark
-        run: php benchmark/bench.php --method=GET --iterations=2000 --warmup=50

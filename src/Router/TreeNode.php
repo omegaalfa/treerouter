@@ -4,14 +4,15 @@ declare(strict_types=1);
 
 namespace Omegaalfa\SwiftRouter\Router;
 
-use Psr\Http\Server\MiddlewareInterface;
+use Omegaalfa\SwiftRouter\Interfaces\MiddlewareInterface as OmegaMiddlewareInterface;
+use Psr\Http\Server\MiddlewareInterface as PsrMiddlewareInterface;
 
 class TreeNode
 {
     /** @var array<string, TreeNode> */
     public array $children = [];
 
-    /** @var array<int, MiddlewareInterface> */
+    /** @var array<int, OmegaMiddlewareInterface|PsrMiddlewareInterface> */
     public array $middlewares = [];
 
     /**
@@ -27,11 +28,16 @@ class TreeNode
     /** @var bool */
     public bool $isEndOfRoute = false;
 
-    /**@var mixed|null */
-    public mixed $handler = null;
+    /** @var callable|null */
+    public $handler = null;
 
-
+    /**
+     * @var string|null
+     */
     public ?string $routeName = null;
 
+    /**
+     * @var array<string, string>
+     */
     public array $constraints = [];
 }

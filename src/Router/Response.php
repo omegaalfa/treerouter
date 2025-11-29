@@ -7,6 +7,9 @@ namespace Omegaalfa\SwiftRouter\Router;
 
 class Response
 {
+    /**
+     * @param array<string, string> $headers
+     */
     public function __construct(
         public mixed $body = null,
         public int   $statusCode = 200,
@@ -17,6 +20,9 @@ class Response
 
     /**
      * Define o corpo da resposta
+     *
+     * @param mixed $body
+     * @return self
      */
     public function withBody(mixed $body): self
     {
@@ -27,6 +33,9 @@ class Response
 
     /**
      * Define o status code
+     *
+     * @param int $code
+     * @return self
      */
     public function withStatus(int $code): self
     {
@@ -37,6 +46,10 @@ class Response
 
     /**
      * Adiciona um header
+     *
+     * @param string $name
+     * @param string $value
+     * @return self
      */
     public function withHeader(string $name, string $value): self
     {

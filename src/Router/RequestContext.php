@@ -7,6 +7,12 @@ namespace Omegaalfa\SwiftRouter\Router;
 
 class RequestContext
 {
+    /**
+     * @param string $method
+     * @param string $path
+     * @param array<string, mixed> $params
+     * @param array<string, mixed> $data
+     */
     public function __construct(
         public string $method,
         public string $path,
@@ -18,6 +24,10 @@ class RequestContext
 
     /**
      * Define um valor no contexto
+     *
+     * @param string $key
+     * @param mixed $value
+     * @return void
      */
     public function set(string $key, mixed $value): void
     {
@@ -26,6 +36,10 @@ class RequestContext
 
     /**
      * Obtém um valor do contexto
+     *
+     * @param string $key
+     * @param mixed|null $default
+     * @return mixed
      */
     public function get(string $key, mixed $default = null): mixed
     {
@@ -34,6 +48,9 @@ class RequestContext
 
     /**
      * Verifica se chave existe
+     *
+     * @param string $key
+     * @return bool
      */
     public function has(string $key): bool
     {

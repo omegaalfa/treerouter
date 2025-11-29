@@ -6,7 +6,10 @@ declare(strict_types=1);
 namespace Omegaalfa\SwiftRouter\Router;
 
 
+use Closure;
 use Omegaalfa\SwiftRouter\Interfaces\MiddlewareInterface;
+use Psr\Http\Message\ResponseInterface as PsrResponseInterface;
+use Psr\Http\Server\MiddlewareInterface as PsrMiddlewareInterface;
 use RuntimeException;
 
 class TreeRouter
@@ -16,16 +19,16 @@ class TreeRouter
      */
     protected TreeNode $root;
 
-    /** @var array<string, array{handler:callable,middlewares:array<int,MiddlewareInterface>,params:array<string,string>}> */
+    /** @var array<string, array{handler:callable,middlewares:array<int,MiddlewareInterface|PsrMiddlewareInterface>,params:array<string,string>}> */
     private array $staticMap = [];
 
-    /** @var array<string, array{handler:callable,middlewares:array<int,MiddlewareInterface>,params:array<string,string>}> */
+    /** @var array<string, array{handler:callable,middlewares:array<int,MiddlewareInterface|PsrMiddlewareInterface>,params:array<string,string>}> */
     private array $routeCache = [];
 
     /** @var string Prefixo atual do grupo */
     private string $groupPrefix = '';
 
-    /** @var array<MiddlewareInterface> Middlewares do grupo atual */
+    /** @var array<MiddlewareInterface|PsrMiddlewareInterface> Middlewares do grupo atual */
     private array $groupMiddlewares = [];
 
     /**
@@ -33,7 +36,7 @@ class TreeRouter
      */
     private int $cacheLimit = 2048;
 
-    /** @var array<MiddlewareInterface> Middlewares globais */
+    /** @var array<MiddlewareInterface|PsrMiddlewareInterface> Middlewares globais */
     private array $globalMiddlewares = [];
 
     public function __construct()
@@ -43,25 +46,33 @@ class TreeRouter
 
 
     /**
-     * @param callable|MiddlewareInterface $middleware
+     * @param callable|MiddlewareInterface|PsrMiddlewareInterface $middleware
      * @return $this
      */
-    public function use(callable|MiddlewareInterface $middleware): self
+    public function use(callable|MiddlewareInterface|PsrMiddlewareInterface $middleware): self
     {
-        if (is_callable($middleware) && !($middleware instanceof MiddlewareInterface)) {
-            $middlewares = new class ($middleware) implements MiddlewareInterface {
-                public function __construct(private $callable)
-                {
-                }
-
-                public function process(RequestContext $context, callable $next): Response
-                {
-                    return ($this->callable)($context, $next);
-                }
-            };
+        if ($middleware instanceof MiddlewareInterface || $middleware instanceof PsrMiddlewareInterface) {
+            $this->globalMiddlewares[] = $middleware;
+            return $this;
         }
 
-        $this->globalMiddlewares[] = $middlewares ?? $middleware;
+        $this->globalMiddlewares[] = new class ($middleware) implements MiddlewareInterface {
+            /**
+             * @var callable(RequestContext, callable): Response
+             */
+            private $callable;
+
+            public function __construct(callable $callable)
+            {
+                $this->callable = $callable;
+            }
+
+            public function process(RequestContext $context, callable $next): Response
+            {
+                return ($this->callable)($context, $next);
+            }
+        };
+
         return $this;
     }
 
@@ -70,7 +81,7 @@ class TreeRouter
      *
      * @param string $prefix Prefixo do grupo (/api, /admin, etc)
      * @param callable $callback Callback que recebe o router
-     * @param array $middlewares Middlewares aplicados a todas as rotas do grupo
+     * @param array<int, MiddlewareInterface|PsrMiddlewareInterface> $middlewares Middlewares aplicados a todas as rotas do grupo
      *
      * @example
      * $router->group('/api/v1', function($router) {
@@ -102,7 +113,7 @@ class TreeRouter
      * @param string $method Método HTTP (GET, POST, PUT, DELETE, etc)
      * @param string $path Padrão da rota (/users/:id)
      * @param callable $handler Handler da rota
-     * @param array<int, MiddlewareInterface> $middlewares Middlewares opcionais
+     * @param array<int, MiddlewareInterface|PsrMiddlewareInterface> $middlewares Middlewares opcionais
      */
     public function addRoute(string $method, string $path, callable $handler, array $middlewares = []): void
     {
@@ -189,7 +200,7 @@ class TreeRouter
      *
      * @param string $method Método HTTP
      * @param string $path Caminho da requisição
-     * @param array $initialData Dados iniciais para o contexto
+     * @param array<string, mixed> $initialData Dados iniciais para o contexto
      * @return Response Resposta processada
      * @throws \RuntimeException Se rota não for encontrada
      */
@@ -238,7 +249,7 @@ class TreeRouter
      *
      * @param string $method Método HTTP
      * @param string $path Caminho da requisição
-     * @return array{handler:callable,middlewares:array,params:array}|null
+     * @return array{handler:callable,middlewares:array<int,MiddlewareInterface|PsrMiddlewareInterface>,params:array<string,string>}|null
      */
     public function findRoute(string $method, string $path): ?array
     {
@@ -291,7 +302,7 @@ class TreeRouter
             return null;
         }
 
-        if ($currentNode->isEndOfRoute && is_callable($currentNode->handler)) {
+        if ($currentNode->isEndOfRoute && $currentNode->handler !== null) {
             $result = [
                 'handler' => $currentNode->handler,
                 'middlewares' => $currentNode->middlewares,
@@ -302,6 +313,7 @@ class TreeRouter
             $this->routeCache[$normalized] = $result;
             if (count($this->routeCache) > $this->cacheLimit) {
                 reset($this->routeCache);
+                /** @var string|null $k */
                 $k = key($this->routeCache);
                 if ($k !== null) {
                     unset($this->routeCache[$k]);
@@ -317,28 +329,30 @@ class TreeRouter
     /**
      * Encapsula um middleware na cadeia
      *
-     * @param $middleware
+     * @param callable|MiddlewareInterface|PsrMiddlewareInterface $middleware
      * @param callable $next
      * @return callable
      */
-    private function wrapMiddleware($middleware, callable $next): callable
+    private function wrapMiddleware(callable|MiddlewareInterface|PsrMiddlewareInterface $middleware, callable $next): callable
     {
         return static function (RequestContext $context) use ($middleware, $next): Response {
-            if ($middleware instanceof MiddlewareInterface) {
+            if ($middleware instanceof MiddlewareInterface || $middleware instanceof PsrMiddlewareInterface) {
                 return $middleware->process($context, $next);
             }
 
-            // Suporta callable simples
-            if (is_callable($middleware)) {
-                return $middleware($context, $next);
+            $result = $middleware($context, $next);
+            if ($result instanceof Response) {
+                return $result;
             }
 
-            throw new \RuntimeException('Invalid middleware type');
+            return new Response($result);
         };
     }
 
     /**
      * Retorna estatísticas do router
+     *
+     * @return array{static_routes:int,cached_routes:int,cache_limit:int,global_middlewares:int}
      */
     public function getStats(): array
     {

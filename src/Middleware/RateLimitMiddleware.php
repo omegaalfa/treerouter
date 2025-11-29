@@ -8,10 +8,26 @@ use Omegaalfa\SwiftRouter\Router\Response;
 
 class RateLimitMiddleware implements MiddlewareInterface
 {
+    /**
+     * @var array <int, mixed>
+     */
     private array $requests = [];
+
+    /**
+     * @var int
+     */
     private int $maxRequests = 3;
+
+    /**
+     * @var int
+     */
     private int $window = 10; // segundos
 
+    /**
+     * @param RequestContext $context
+     * @param callable $next
+     * @return Response
+     */
     public function process(RequestContext $context, callable $next): Response
     {
         $ip = $context->get('ip', '127.0.0.1');
