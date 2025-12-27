@@ -90,7 +90,7 @@ final class MiddlewareTest extends TestCase
         );
 
         $this->assertSame(json_encode($payload), $response->body);
-        $this->assertSame('application/json', $response->headers['Content-Type']);
+        $this->assertSame('application/json; charset=utf-8', $response->headers['Content-Type']);
     }
 
     public function testJsonMiddlewareLeavesNonArrayBody(): void

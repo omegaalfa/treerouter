@@ -14,9 +14,23 @@ class JsonMiddleware implements MiddlewareInterface
 
         // Se body for array, converte para JSON
         if (is_array($response->body)) {
-            return $response
-                ->withBody(json_encode($response->body))
-                ->withHeader('Content-Type', 'application/json');
+            try {
+                $json = json_encode(
+                    $response->body,
+                    JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+                );
+
+                return $response
+                    ->withBody($json)
+                    ->withHeader('Content-Type', 'application/json; charset=utf-8');
+            } catch (\JsonException $e) {
+                error_log("JSON encoding error: " . $e->getMessage());
+
+                return (new Response())
+                    ->withStatus(500)
+                    ->withBody('Internal server error: Unable to encode JSON')
+                    ->withHeader('Content-Type', 'text/plain');
+            }
         }
 
         return $response;

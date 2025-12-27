@@ -12,7 +12,8 @@ class AuthMiddleware implements MiddlewareInterface
     {
         $token = $context->get('token');
 
-        if (!$token || $token !== 'secret-token') {
+        // Validação estrita: deve ser string e não vazia
+        if (!is_string($token) || $token === '' || $token !== 'secret-token') {
             echo "❌ Unauthorized\n\n";
             return (new Response())
                 ->withStatus(401)

@@ -6,8 +6,10 @@ declare(strict_types=1);
 namespace Omegaalfa\SwiftRouter\Router;
 
 
+use InvalidArgumentException;
 use Omegaalfa\SwiftRouter\Interfaces\MiddlewareInterface;
 use RuntimeException;
+use Throwable;
 
 class TreeRouter
 {
@@ -36,9 +38,16 @@ class TreeRouter
     /** @var array<MiddlewareInterface> Middlewares globais */
     private array $globalMiddlewares = [];
 
-    public function __construct()
+    /** @var int Tamanho máximo de parâmetro de rota */
+    private int $maxParamLength = 255;
+
+    /** @var array<string> Namespaces permitidos para controllers */
+    private array $allowedNamespaces = [];
+
+    public function __construct(array $allowedNamespaces = [])
     {
         $this->root = new TreeNode();
+        $this->allowedNamespaces = $allowedNamespaces;
     }
 
 
@@ -136,11 +145,16 @@ class TreeRouter
      */
     public function addRoute(string $method, string $path, callable|array $handler, array $middlewares = []): void
     {
-        // Normaliza o método
-        $method = strtoupper($method);
+        // Valida e normaliza o método
+        $method = HttpMethod::fromString($method)->value;
 
-        // Aplica prefixo do grupo se existir
-        $fullPath = $this->groupPrefix ? $this->buildGroupPath($path) : $path;
+        // Valida e normaliza o handler
+        $handler = $this->validateAndNormalizeHandler($handler);
+
+        // Aplica prefixo do grupo se existir e normaliza o path
+        $fullPath = $this->normalizePath(
+            $this->groupPrefix ? $this->buildGroupPath($path) : $path
+        );
 
         // Combina middlewares do grupo com os da rota
         $allMiddlewares = array_merge($this->groupMiddlewares, $middlewares);
@@ -150,10 +164,6 @@ class TreeRouter
 
         // normalize without excessive trimming
         $p = ltrim($routePath, '/');
-
-        if (is_array($handler)) {
-            $handler = $this->normalizeArrayHandler($handler);
-        }
 
         // register static fast-path (only quando o caminho não tem parâmetros)
         if (!str_contains($fullPath, ':')) {
@@ -195,13 +205,69 @@ class TreeRouter
     }
 
     /**
+     * Normaliza e valida o path da rota
+     *
+     * @param string $path
+     * @return string
+     * @throws InvalidArgumentException
+     */
+    private function normalizePath(string $path): string
+    {
+        // Remove slashes duplicados
+        $path = preg_replace('#/+#', '/', $path);
+
+        // Remove trailing slash (exceto root)
+        $path = $path !== '/' ? rtrim($path, '/') : '/';
+
+        // Detecta path traversal
+        $decoded = urldecode($path);
+        if (str_contains($decoded, '..') || str_contains($decoded, '\\')) {
+            throw new InvalidArgumentException('Path traversal detected in route: ' . $path);
+        }
+
+        return $path;
+    }
+
+    /**
+     * Valida e normaliza o handler
+     *
+     * @param callable|array<string, string> $handler
+     * @return callable
+     * @throws InvalidArgumentException
+     */
+    private function validateAndNormalizeHandler(callable|array $handler): callable
+    {
+        if (is_array($handler)) {
+            return $this->normalizeArrayHandler($handler);
+        }
+
+        if (is_string($handler)) {
+            // Bloquear funções perigosas
+            $dangerous = [
+                'system', 'exec', 'passthru', 'shell_exec', 'eval',
+                'assert', 'create_function', 'call_user_func', 'call_user_func_array'
+            ];
+
+            if (in_array(strtolower($handler), $dangerous, true)) {
+                throw new InvalidArgumentException("Dangerous callable not allowed: {$handler}");
+            }
+        }
+
+        if (!is_callable($handler)) {
+            throw new InvalidArgumentException('Handler must be callable');
+        }
+
+        return $handler;
+    }
+
+    /**
      * @param array<string, string> $handler
      * @return callable
      */
     protected function normalizeArrayHandler(array $handler): callable
     {
         if (count($handler) !== 2) {
-            throw new \InvalidArgumentException(
+            throw new InvalidArgumentException(
                 'Array handler must be [ControllerClass, method]'
             );
         }
@@ -209,16 +275,41 @@ class TreeRouter
         [$controller, $method] = $handler;
 
         if (!is_string($controller) || !is_string($method)) {
-            throw new \InvalidArgumentException(
+            throw new InvalidArgumentException(
                 'Invalid array handler format'
             );
         }
 
-        return function (...$args) use ($controller, $method) {
+        // Valida que a classe existe
+        if (!class_exists($controller)) {
+            throw new InvalidArgumentException(
+                "Controller class does not exist: {$controller}"
+            );
+        }
+
+        // Valida namespace se configurado
+        if (!empty($this->allowedNamespaces)) {
+            $isAllowed = false;
+            foreach ($this->allowedNamespaces as $namespace) {
+                if (str_starts_with($controller, $namespace)) {
+                    $isAllowed = true;
+                    break;
+                }
+            }
+
+            if (!$isAllowed) {
+                throw new InvalidArgumentException(
+                    "Controller must be in allowed namespace: {$controller}. " .
+                    "Allowed: " . implode(', ', $this->allowedNamespaces)
+                );
+            }
+        }
+
+        return static function (...$args) use ($controller, $method) {
             $instance = new $controller();
 
             if (!method_exists($instance, $method)) {
-                throw new \RuntimeException(
+                throw new RuntimeException(
                     "Method {$method} does not exist on {$controller}"
                 );
             }
@@ -235,17 +326,30 @@ class TreeRouter
      * @param array<string, mixed> $initialData Dados iniciais para o contexto
      * @return Response Resposta processada
      * @throws RuntimeException Se rota não for encontrada
+     * @throws InvalidArgumentException Se método HTTP for inválido
      */
     public function dispatch(string $method, string $path, array $initialData = []): Response
     {
-        $route = $this->findRoute($method, $path);
+        // Valida o método HTTP
+        $validatedMethod = HttpMethod::fromString($method);
+        $originalMethod = $validatedMethod->value;
+
+        // Tratar HEAD como GET
+        $searchMethod = $originalMethod === 'HEAD' ? 'GET' : $originalMethod;
+
+        $route = $this->findRoute($searchMethod, $path);
+
+        // Se não encontrou e é OPTIONS, retorna lista de métodos permitidos
+        if ($route === null && $originalMethod === 'OPTIONS') {
+            return $this->handleOptions($path);
+        }
 
         if ($route === null) {
-            throw new RuntimeException("Route not found: {$method} {$path}");
+            throw new RuntimeException("Route not found: {$originalMethod} {$path}");
         }
 
         // Cria contexto da requisição
-        $context = new RequestContext($method, $path, $route['params'], $initialData);
+        $context = new RequestContext($originalMethod, $path, $route['params'], $initialData);
 
         // Combina middlewares: globais + específicos da rota
         $allMiddlewares = array_merge($this->globalMiddlewares, $route['middlewares']);
@@ -273,7 +377,41 @@ class TreeRouter
         }
 
         // Executa a cadeia
-        return $chain($context);
+        $response = $chain($context);
+
+        // Se era HEAD, remove o body
+        if ($originalMethod === 'HEAD') {
+            $response = $response->withBody(null);
+        }
+
+        return $response;
+    }
+
+    /**
+     * Trata requisições OPTIONS retornando métodos permitidos
+     *
+     * @param string $path
+     * @return Response
+     */
+    private function handleOptions(string $path): Response
+    {
+        $methods = [];
+
+        foreach (['GET', 'POST', 'PUT', 'DELETE', 'PATCH'] as $method) {
+            if ($this->findRoute($method, $path) !== null) {
+                $methods[] = $method;
+            }
+        }
+
+        if (in_array('GET', $methods, true)) {
+            $methods[] = 'HEAD';
+        }
+
+        $methods[] = 'OPTIONS';
+
+        return (new Response())
+            ->withHeader('Allow', implode(', ', array_unique($methods)))
+            ->withStatus(204);
     }
 
     /**
@@ -285,14 +423,17 @@ class TreeRouter
      */
     public function findRoute(string $method, string $path): ?array
     {
-        // Normaliza o método
-        $method = strtoupper($method);
+        // Valida e normaliza o método
+        $method = HttpMethod::fromString($method)->value;
+
+        // Normaliza o path usando o mesmo método de addRoute
+        $normalizedPath = $this->normalizePath($path);
 
         // Adiciona método ao caminho
-        $fullPath = $method . '::' . $path;
+        $fullPath = $method . '::' . $normalizedPath;
 
         // normalize incoming path
-        $normalized = '/' . preg_replace('#/+#', '/', ltrim($fullPath, '/'));
+        $normalized = '/' . ltrim($fullPath, '/');
 
         // static fast map
         if (isset($this->staticMap[$normalized])) {
@@ -325,6 +466,13 @@ class TreeRouter
 
             // 2 — param child
             if ($currentNode->paramChild !== null) {
+                // Valida tamanho do parâmetro para prevenir DoS
+                if (strlen($segment) > $this->maxParamLength) {
+                    throw new RuntimeException(
+                        "Route parameter exceeds maximum length of {$this->maxParamLength} characters"
+                    );
+                }
+
                 $params[$currentNode->paramName ?? 'param'] = $segment;
                 $currentNode = $currentNode->paramChild;
                 continue;
@@ -368,16 +516,24 @@ class TreeRouter
     private function wrapMiddleware(callable|MiddlewareInterface $middleware, callable $next): callable
     {
         return static function (RequestContext $context) use ($middleware, $next): Response {
-            if ($middleware instanceof MiddlewareInterface) {
-                return $middleware->process($context, $next);
-            }
+            try {
+                if ($middleware instanceof MiddlewareInterface) {
+                    return $middleware->process($context, $next);
+                }
 
-            $result = $middleware($context, $next);
-            if ($result instanceof Response) {
-                return $result;
-            }
+                $result = $middleware($context, $next);
+                if ($result instanceof Response) {
+                    return $result;
+                }
 
-            return new Response($result);
+                return new Response($result);
+            } catch (Throwable $e) {
+                // Retorna erro 500
+                // Nota: Em produção, considere usar um logger para registrar erros
+                return (new Response())
+                    ->withStatus(500)
+                    ->withBody(['error' => 'Internal server error', 'message' => $e->getMessage()]);
+            }
         };
     }
 
@@ -415,5 +571,27 @@ class TreeRouter
     public function setCacheLimit(int $limit): void
     {
         $this->cacheLimit = $limit;
+    }
+
+    /**
+     * Define o tamanho máximo de parâmetro de rota
+     *
+     * @param int $length
+     * @return void
+     */
+    public function setMaxParamLength(int $length): void
+    {
+        $this->maxParamLength = $length;
+    }
+
+    /**
+     * Define os namespaces permitidos para controllers
+     *
+     * @param array<string> $namespaces
+     * @return void
+     */
+    public function setAllowedNamespaces(array $namespaces): void
+    {
+        $this->allowedNamespaces = $namespaces;
     }
 }
