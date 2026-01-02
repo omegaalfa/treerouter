@@ -2,13 +2,143 @@
 
 ## 📚 Índice
 
-1. [O que são Middlewares](#o-que-são-middlewares)
-2. [Como Funcionam](#como-funcionam)
-3. [Tipos de Middlewares](#tipos-de-middlewares)
-4. [Criando Middlewares](#criando-middlewares)
-5. [Exemplos Práticos](#exemplos-práticos)
-6. [Route Groups](#route-groups)
-7. [Boas Práticas](#boas-práticas)
+1. [Início Rápido](#início-rápido)
+2. [O que são Middlewares](#o-que-são-middlewares)
+3. [Como Funcionam](#como-funcionam)
+4. [Tipos de Middlewares](#tipos-de-middlewares)
+5. [Criando Middlewares](#criando-middlewares)
+6. [Exemplos Práticos](#exemplos-práticos)
+7. [Route Groups](#route-groups)
+8. [Boas Práticas](#boas-práticas)
+
+---
+
+## Início Rápido
+
+### Instalação
+
+```bash
+composer require omegaalfa/swift-router
+```
+
+### Exemplo Básico Completo
+
+```php
+<?php
+
+require_once __DIR__ . '/vendor/autoload.php';
+
+use Omega\Router\Router\SwiftRouter;
+
+// 1️⃣ Criar o router
+$router = new SwiftRouter();
+
+// 2️⃣ Definir as rotas
+$router->get('/', function($ctx, $res) {
+    return $res->withBody(['message' => 'Hello World!']);
+});
+
+$router->get('/users/:id', function($ctx, $res) {
+    $userId = $ctx->params['id'];
+    return $res->withBody(['user_id' => $userId]);
+});
+
+$router->post('/users', function($ctx, $res) {
+    $body = $ctx->body;
+    return $res->withStatus(201)->withBody(['created' => true, 'data' => $body]);
+});
+
+// 3️⃣ Capturar método e caminho da requisição
+$method = $_SERVER['REQUEST_METHOD'];
+$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+
+// 4️⃣ Executar o dispatch
+$response = $router->dispatch($method, $path);
+
+// 5️⃣ Enviar a resposta HTTP
+http_response_code($response->statusCode);
+
+// Definir cabeçalhos
+foreach ($response->headers as $name => $value) {
+    header("$name: $value");
+}
+
+// Enviar o corpo da resposta
+echo is_string($response->body) ? $response->body : json_encode($response->body);
+```
+
+### Com Middlewares
+
+```php
+<?php
+
+require_once __DIR__ . '/vendor/autoload.php';
+
+use Omega\Router\Router\SwiftRouter;
+use Omega\Router\Middleware\JsonMiddleware;
+use Omega\Router\Middleware\CorsMiddleware;
+
+$router = new SwiftRouter();
+
+// Middlewares globais
+$router->use(new JsonMiddleware());
+$router->use(new CorsMiddleware());
+
+// Rotas
+$router->get('/api/users', function($ctx, $res) {
+    return $res->withBody(['users' => [/* ... */]]);
+});
+
+// Dispatch
+$method = $_SERVER['REQUEST_METHOD'];
+$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$response = $router->dispatch($method, $path);
+
+// Resposta HTTP
+http_response_code($response->statusCode);
+foreach ($response->headers as $name => $value) {
+    header("$name: $value");
+}
+echo is_string($response->body) ? $response->body : json_encode($response->body);
+```
+
+### Arquivo index.php Completo
+
+```php
+<?php
+
+require_once __DIR__ . '/vendor/autoload.php';
+
+use Omega\Router\Router\SwiftRouter;
+use Omega\Router\Middleware\JsonMiddleware;
+
+$router = new SwiftRouter();
+$router->use(new JsonMiddleware());
+
+// Suas rotas aqui
+$router->get('/', function($ctx, $res) {
+    return $res->withBody(['status' => 'ok']);
+});
+
+// Captura e dispatch
+$method = $_SERVER['REQUEST_METHOD'];
+$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+
+try {
+    $response = $router->dispatch($method, $path);
+} catch (\Throwable $e) {
+    $response = (new \Omega\Router\Router\Response())
+        ->withStatus(500)
+        ->withBody(['error' => $e->getMessage()]);
+}
+
+// Envio da resposta
+http_response_code($response->statusCode);
+foreach ($response->headers as $name => $value) {
+    header("$name: $value");
+}
+echo is_string($response->body) ? $response->body : json_encode($response->body);
+```
 
 ---
 
@@ -39,6 +169,17 @@ $router->group('/api', function($router) {
     $router->get('/posts', $handler);    // GET /api/posts
     $router->post('/users', $handler);   // POST /api/users
 });
+
+// Execução
+$method = $_SERVER['REQUEST_METHOD'];
+$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$response = $router->dispatch($method, $path);
+
+http_response_code($response->statusCode);
+foreach ($response->headers as $name => $value) {
+    header("$name: $value");
+}
+echo is_string($response->body) ? $response->body : json_encode($response->body);
 ```
 
 **Resultado:**
@@ -55,6 +196,17 @@ $router->group('/admin', function($router) {
     $router->get('/users', $usersHandler);
     $router->post('/settings', $settingsHandler);
 }, [new AuthMiddleware(), new AdminMiddleware()]);
+
+// Execução
+$method = $_SERVER['REQUEST_METHOD'];
+$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$response = $router->dispatch($method, $path);
+
+http_response_code($response->statusCode);
+foreach ($response->headers as $name => $value) {
+    header("$name: $value");
+}
+echo is_string($response->body) ? $response->body : json_encode($response->body);
 ```
 
 **Comportamento:**
@@ -80,6 +232,17 @@ $router->group('/api', function($router) {
         $router->get('/posts', $v2PostsHandler);      // /api/v2/posts
     });
 });
+
+// Execução
+$method = $_SERVER['REQUEST_METHOD'];
+$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$response = $router->dispatch($method, $path);
+
+http_response_code($response->statusCode);
+foreach ($response->headers as $name => $value) {
+    header("$name: $value");
+}
+echo is_string($response->body) ? $response->body : json_encode($response->body);
 ```
 
 **Uso comum:** Versionamento de APIs, multi-idioma, multi-tenancy
@@ -107,6 +270,17 @@ $router->group('/users/:userId', function($router) {
         return $res->withBody("User {$userId}, Post {$postId}");
     });
 });
+
+// Execução
+$method = $_SERVER['REQUEST_METHOD'];
+$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$response = $router->dispatch($method, $path);
+
+http_response_code($response->statusCode);
+foreach ($response->headers as $name => $value) {
+    header("$name: $value");
+}
+echo is_string($response->body) ? $response->body : json_encode($response->body);
 ```
 
 **Resultado:**
@@ -145,6 +319,17 @@ $router->group('/api/v1', function($router) {
         $router->get('/:id', $showPostHandler);         // GET /api/v1/posts/456
     }, [new AuthMiddleware()]);
 });
+
+// Execução
+$method = $_SERVER['REQUEST_METHOD'];
+$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$response = $router->dispatch($method, $path);
+
+http_response_code($response->statusCode);
+foreach ($response->headers as $name => $value) {
+    header("$name: $value");
+}
+echo is_string($response->body) ? $response->body : json_encode($response->body);
 ```
 
 ---
@@ -172,6 +357,17 @@ $router->group('/api', function($router) {
     }, [new AdminMiddleware()]);
     
 }, [new ApiAuthMiddleware()]);
+
+// Execução
+$method = $_SERVER['REQUEST_METHOD'];
+$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$response = $router->dispatch($method, $path);
+
+http_response_code($response->statusCode);
+foreach ($response->headers as $name => $value) {
+    header("$name: $value");
+}
+echo is_string($response->body) ? $response->body : json_encode($response->body);
 ```
 
 **Ordem de execução para `GET /api/admin/users`:**
@@ -224,6 +420,17 @@ $router->group('/api', function($router) {
     $router->get('/health', $healthHandler);
     $router->get('/metrics', $metricsHandler);
 }, [new ApiAuthMiddleware()]);
+
+// Execução
+$method = $_SERVER['REQUEST_METHOD'];
+$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$response = $router->dispatch($method, $path);
+
+http_response_code($response->statusCode);
+foreach ($response->headers as $name => $value) {
+    header("$name: $value");
+}
+echo is_string($response->body) ? $response->body : json_encode($response->body);
 ```
 
 ---
@@ -311,6 +518,17 @@ $router->group('/tenant/:tenantId', function($router) {
     $router->get('/users', $usersHandler);
     $router->get('/reports', $reportsHandler);
 }, [new TenantMiddleware()]);
+
+// Execução
+$method = $_SERVER['REQUEST_METHOD'];
+$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$response = $router->dispatch($method, $path);
+
+http_response_code($response->statusCode);
+foreach ($response->headers as $name => $value) {
+    header("$name: $value");
+}
+echo is_string($response->body) ? $response->body : json_encode($response->body);
 ```
 
 #### Internacionalização
@@ -321,6 +539,17 @@ $router->group('/:locale', function($router) {
     $router->get('/about', $aboutHandler);
     $router->get('/products', $productsHandler);
 }, [new LocaleMiddleware()]);
+
+// Execução
+$method = $_SERVER['REQUEST_METHOD'];
+$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$response = $router->dispatch($method, $path);
+
+http_response_code($response->statusCode);
+foreach ($response->headers as $name => $value) {
+    header("$name: $value");
+}
+echo is_string($response->body) ? $response->body : json_encode($response->body);
 
 // /en/, /pt/, /es/, etc
 ```
@@ -335,6 +564,17 @@ $router->group('/api', function($router) {
 $router->group('/app', function($router) {
     $router->get('/dashboard', $dashboardHandler);
 }, [new AppMiddleware()]);
+
+// Execução
+$method = $_SERVER['REQUEST_METHOD'];
+$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$response = $router->dispatch($method, $path);
+
+http_response_code($response->statusCode);
+foreach ($response->headers as $name => $value) {
+    header("$name: $value");
+}
+echo is_string($response->body) ? $response->body : json_encode($response->body);
 ```
 
 ---
@@ -502,6 +742,17 @@ class LoggerMiddleware implements MiddlewareInterface
 **Uso:**
 ```php
 $router->use(new LoggerMiddleware());
+
+// Execução
+$method = $_SERVER['REQUEST_METHOD'];
+$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$response = $router->dispatch($method, $path);
+
+http_response_code($response->statusCode);
+foreach ($response->headers as $name => $value) {
+    header("$name: $value");
+}
+echo is_string($response->body) ? $response->body : json_encode($response->body);
 ```
 
 ---
@@ -548,7 +799,15 @@ $router->get('/profile', function($ctx, $res) {
 }, [new AuthMiddleware()]);
 
 // Dispatch com token
-$response = $router->dispatch('GET', '/profile', ['token' => 'secret-token']);
+$method = $_SERVER['REQUEST_METHOD'];
+$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$response = $router->dispatch($method, $path, ['token' => 'secret-token']);
+
+http_response_code($response->statusCode);
+foreach ($response->headers as $name => $value) {
+    header("$name: $value");
+}
+echo is_string($response->body) ? $response->body : json_encode($response->body);
 ```
 
 ---
@@ -573,6 +832,17 @@ class CorsMiddleware implements MiddlewareInterface
 **Uso:**
 ```php
 $router->use(new CorsMiddleware());
+
+// Execução
+$method = $_SERVER['REQUEST_METHOD'];
+$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$response = $router->dispatch($method, $path);
+
+http_response_code($response->statusCode);
+foreach ($response->headers as $name => $value) {
+    header("$name: $value");
+}
+echo is_string($response->body) ? $response->body : json_encode($response->body);
 ```
 
 ---
@@ -655,6 +925,17 @@ $router->post('/users', $handler, [
         'age' => 'numeric'
     ])
 ]);
+
+// Execução
+$method = $_SERVER['REQUEST_METHOD'];
+$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$response = $router->dispatch($method, $path);
+
+http_response_code($response->statusCode);
+foreach ($response->headers as $name => $value) {
+    header("$name: $value");
+}
+echo is_string($response->body) ? $response->body : json_encode($response->body);
 ```
 
 ---
@@ -823,6 +1104,17 @@ $auth = new AuthMiddleware();
 $router->get('/profile', $profileHandler, [$auth]);
 $router->get('/users', $usersHandler, [$auth]);
 $router->post('/posts', $createPostHandler, [$auth, new ValidationMiddleware(['title' => 'required'])]);
+
+// Execução
+$method = $_SERVER['REQUEST_METHOD'];
+$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$response = $router->dispatch($method, $path);
+
+http_response_code($response->statusCode);
+foreach ($response->headers as $name => $value) {
+    header("$name: $value");
+}
+echo is_string($response->body) ? $response->body : json_encode($response->body);
 ```
 
 
